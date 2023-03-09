@@ -3,15 +3,20 @@ mod commands;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use serenity::gateway::Shard;
-use serenity::{async_trait, framework};
 use serenity::client::bridge::gateway::ShardManager;
 use serenity::framework::standard::macros::group;
 use serenity::framework::StandardFramework;
+use serenity::gateway::Shard;
 use serenity::http::Http;
 use serenity::model::event::ResumedEvent;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
+use serenity::{async_trait, framework};
+
+use crate::commands::config::*;
+use crate::commands::info::*;
+use crate::commands::searches::*;
+
 use tracing::{error, info};
 
 pub struct ShardManagerContainer;
@@ -33,17 +38,25 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands()]
+#[commands(
+    help,
+    botinfo,
+    addhook,
+    removehook,
+    setprefix,
+    badtags,
+    warningtags,
+    random,
+    search,
+    fullsearch
+)]
 struct General;
-
-#[group]
-#[commands()]
-struct Webhook;
-
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().expect("failed to load .env file");
+
+    tracing_subscriber::fmt::init();
 
     let token = std::env::var("DISCORD_TOKEN").expect("Expected token in env");
     let http = Http::new(&token);
@@ -54,16 +67,16 @@ async fn main() {
             owners.insert(info.owner.id);
 
             (owners, info.id)
-        },
-        Err(why) => panic!("Could not access app info: {:?}", why)
+        }
+        Err(why) => panic!("Could not access app info: {:?}", why),
     };
 
     let framework = StandardFramework::new()
         .configure(|c| c.owners(owners).prefix(">"))
         .group(&GENERAL_GROUP);
 
-    let intents = GatewayIntents::GUILD_MESSAGES 
-        | GatewayIntents::DIRECT_MESSAGES 
+    let intents = GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = Client::builder(&token, intents)
@@ -80,7 +93,9 @@ async fn main() {
     let shard_manager = client.shard_manager.clone();
 
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Could not register ctrl+c handler");
         shard_manager.lock().await.shutdown_all().await;
     });
 
